@@ -1,0 +1,12 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: eduai-campus-backend
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -1,0 +1,14 @@
+{
+  "name": "EduAI Campus",
+  "appid": "__UNI__EDUAI",
+  "description": "学校机构 AI 伴学微信小程序 MVP",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false
+    },
+    "usingComponents": true
+  }
+}
