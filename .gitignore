@@ -7,7 +7,10 @@ coverage/
 *.log
 *.iml
 *.tsbuildinfo
+.flattened-pom.xml
 .DS_Store
 backend/data/
 web-admin/.env.local
 miniapp/unpackage/
+.analysis/
+.migration/

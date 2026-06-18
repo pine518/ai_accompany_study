@@ -1,0 +1,38 @@
+spring:
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    dynamic:
+      primary: master
+      strict: true
+      datasource:
+        master:
+          type: ${spring.datasource.type}
+          driverClassName: com.mysql.cj.jdbc.Driver
+          url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:eduai}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+          username: ${DB_USERNAME:eduai}
+          password: ${DB_PASSWORD:eduai_dev_password}
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      password: ${REDIS_PASSWORD:eduai_redis_dev_password}
+      timeout: 10s
+      ssl.enabled: false
+      redisson:
+        config: |
+          singleServerConfig:
+            address: "redis://${REDIS_HOST:redis}:${REDIS_PORT:6379}"
+            database: 0
+            password: ${REDIS_PASSWORD:eduai_redis_dev_password}
+            connectTimeout: 10000
+            timeout: 3000
+            retryAttempts: 3
+            retryInterval: 1500
+
+config:
+  datasource:
+    url: ${spring.datasource.dynamic.datasource.master.url}
+    username: ${spring.datasource.dynamic.datasource.master.username}
+    password: ${spring.datasource.dynamic.datasource.master.password}
+    driverClassName: ${spring.datasource.dynamic.datasource.master.driverClassName}

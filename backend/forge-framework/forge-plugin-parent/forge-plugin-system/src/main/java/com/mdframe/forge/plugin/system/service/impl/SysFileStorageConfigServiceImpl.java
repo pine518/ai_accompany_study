@@ -1,0 +1,181 @@
+package com.mdframe.forge.plugin.system.service.impl;
+
+import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.mdframe.forge.plugin.system.entity.SysFileStorageConfig;
+import com.mdframe.forge.plugin.system.mapper.SysFileStorageConfigMapper;
+import com.mdframe.forge.plugin.system.service.ISysFileStorageConfigService;
+import com.mdframe.forge.starter.core.domain.PageQuery;
+import com.mdframe.forge.starter.file.core.FileManager;
+import com.mdframe.forge.starter.file.model.StorageConfig;
+import com.mdframe.forge.starter.file.spi.StorageConfigProvider;
+import com.mdframe.forge.starter.file.storage.FileStorage;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 文件存储配置Service实现
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class SysFileStorageConfigServiceImpl extends ServiceImpl<SysFileStorageConfigMapper, SysFileStorageConfig>
+        implements ISysFileStorageConfigService {
+    
+    private final StorageConfigProvider configProvider;
+    private final FileManager fileManager;
+    
+    @Override
+    public Page<SysFileStorageConfig> page(PageQuery query, SysFileStorageConfig condition) {
+        LambdaQueryWrapper<SysFileStorageConfig> wrapper = new LambdaQueryWrapper<>();
+        
+        if (StrUtil.isNotBlank(condition.getConfigName())) {
+            wrapper.like(SysFileStorageConfig::getConfigName, condition.getConfigName());
+        }
+        
+        if (StrUtil.isNotBlank(condition.getStorageType())) {
+            wrapper.eq(SysFileStorageConfig::getStorageType, condition.getStorageType());
+        }
+        
+        if (condition.getEnabled() != null) {
+            wrapper.eq(SysFileStorageConfig::getEnabled, condition.getEnabled());
+        }
+        wrapper.orderByDesc(SysFileStorageConfig::getIsDefault)
+                .orderByAsc(SysFileStorageConfig::getOrderNum);
+        Page<SysFileStorageConfig> page = new Page<>(query.getPageNum(), query.getPageSize());
+        return this.baseMapper.selectPage(page, wrapper);
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void setDefault(Long id) {
+        // 取消所有默认配置
+        this.lambdaUpdate()
+                .set(SysFileStorageConfig::getIsDefault, false)
+                .update();
+        
+        // 设置新的默认配置
+        this.lambdaUpdate()
+                .eq(SysFileStorageConfig::getId, id)
+                .set(SysFileStorageConfig::getIsDefault, true)
+                .update();
+        
+        // 刷新配置缓存
+        configProvider.refreshConfig();
+        fileManager.refreshConfiguredStorages();
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateEnabled(Long id, Boolean enabled) {
+        this.lambdaUpdate()
+                .eq(SysFileStorageConfig::getId, id)
+                .set(SysFileStorageConfig::getEnabled, enabled)
+                .update();
+        
+        // 刷新配置缓存
+        configProvider.refreshConfig();
+        fileManager.refreshConfiguredStorages();
+    }
+    
+    @Override
+    public boolean testConnection(Long id) {
+        SysFileStorageConfig config = this.getById(id);
+        if (config == null) {
+            return false;
+        }
+        
+        try {
+            FileStorage storage = fileManager.getStorage(config.getStorageType());
+            if (storage == null) {
+                log.warn("未找到存储实现: {}", config.getStorageType());
+                return false;
+            }
+            storage.init(convertToStorageConfig(config));
+            return storage.testConnection();
+        } catch (Exception e) {
+            log.error("测试连接失败", e);
+            return false;
+        } finally {
+            fileManager.refreshConfiguredStorages();
+        }
+    }
+
+    @Override
+    public boolean createBucket(Long id) {
+        SysFileStorageConfig config = this.getById(id);
+        if (config == null) {
+            return false;
+        }
+
+        FileStorage storage = fileManager.getStorage(config.getStorageType());
+        if (storage == null) {
+            throw new RuntimeException("不支持的存储类型: " + config.getStorageType());
+        }
+        try {
+            storage.init(convertToStorageConfig(config));
+            return storage.createBucket(config.getBucketName());
+        } finally {
+            fileManager.refreshConfiguredStorages();
+        }
+    }
+
+    @Override
+    public SysFileStorageConfig getDefaultConfig() {
+        return this.lambdaQuery()
+                .eq(SysFileStorageConfig::getIsDefault, true)
+                .eq(SysFileStorageConfig::getEnabled, true)
+                .last("limit 1")
+                .one();
+    }
+
+    @Override
+    public boolean save(SysFileStorageConfig entity) {
+        boolean success = super.save(entity);
+        configProvider.refreshConfig();
+        fileManager.refreshConfiguredStorages();
+        return success;
+    }
+
+    @Override
+    public boolean updateById(SysFileStorageConfig entity) {
+        boolean success = super.updateById(entity);
+        configProvider.refreshConfig();
+        fileManager.refreshConfiguredStorages();
+        return success;
+    }
+
+    @Override
+    public boolean removeById(java.io.Serializable id) {
+        boolean success = super.removeById(id);
+        configProvider.refreshConfig();
+        fileManager.refreshConfiguredStorages();
+        return success;
+    }
+
+    private StorageConfig convertToStorageConfig(SysFileStorageConfig entity) {
+        StorageConfig config = new StorageConfig();
+        config.setId(entity.getId());
+        config.setConfigName(entity.getConfigName());
+        config.setStorageType(entity.getStorageType());
+        config.setIsDefault(entity.getIsDefault());
+        config.setEnabled(entity.getEnabled());
+        config.setEndpoint(entity.getEndpoint());
+        config.setAccessKey(entity.getAccessKey());
+        config.setSecretKey(entity.getSecretKey());
+        config.setBucketName(entity.getBucketName());
+        config.setRegion(entity.getRegion());
+        config.setBasePath(entity.getBasePath());
+        config.setDomain(entity.getDomain());
+        config.setUseHttps(entity.getUseHttps());
+        config.setMaxFileSize(entity.getMaxFileSize());
+        config.setAllowedTypes(entity.getAllowedTypes());
+        config.setOrderNum(entity.getOrderNum());
+        config.setExtraConfig(entity.getExtraConfig());
+        return config;
+    }
+}

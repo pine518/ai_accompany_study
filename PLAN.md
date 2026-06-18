@@ -1,5 +1,29 @@
 ﻿# EduAI Campus 开发计划
 
+## 当前执行状态（2026-06-18）
+
+已完成 Forge Admin 基座重构阶段：
+
+- 引入认证、多租户、RBAC、数据权限、日志、Excel、文件、消息和 AI 通用基座。
+- 新建独立 `eduai-business` 教育业务模块。
+- 增加 ArchUnit 规则，阻止业务依赖 Forge 插件实现。
+- 移除 Flowable、代码生成器、报表、数据集和外部代理的运行依赖。
+- 修复 AI 会话按 `sessionId` 越权读取、删除和复用风险。
+- 管理端切换为 Forge Vue 3 基座并增加 AI 伴学工作台。
+- 部署路线调整为 MySQL 8 + Redis，向量库后续接入 Qdrant。
+- 修复初始化 SQL 菜单清理条件链，确保停用菜单路径在同一 `WHERE` 中处理。
+- 父 POM 聚合模块已收敛为 `forge-admin-server`、`forge-framework`、`eduai-business`。
+- 后端完整 `mvn package`、管理端 `npm run build`、`docker compose config` 已通过。
+- 修复管理端布局动态导入的跨工作区绝对路径问题，并校准幂等模块测试桩与当前实现契约。
+
+当前验证边界与残余风险：
+
+- Docker Engine 未启动，仅完成 Compose 配置解析，尚未验证镜像构建、容器健康检查与数据库初始化执行。
+- 管理端构建仍有图标解析、动态/静态混合导入和大体积分块警告，不阻断产物生成，但需在后续前端性能与资源治理阶段处理。
+- `docker-compose.yml` 中仅包含本地开发默认口令和开发加密密钥，生产部署必须通过环境变量或密钥管理服务覆盖。
+
+下一阶段从账号租户与教育领域持久化开始，内存 MVP 数据仓库将按 API 契约逐步替换为 MySQL Repository。
+
 ## 1. 计划目标
 
 本计划基于已确认的首期范围制定：B 端学校/教育机构版，终端覆盖 Web + 微信小程序，目标学生为初高中生。

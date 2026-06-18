@@ -1,0 +1,149 @@
+package com.mdframe.forge.plugin.system.service.impl;
+
+import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.mdframe.forge.plugin.system.entity.SysFileMetadata;
+import com.mdframe.forge.plugin.system.entity.SysFileStorageConfig;
+import com.mdframe.forge.plugin.system.mapper.SysFileMetadataMapper;
+import com.mdframe.forge.plugin.system.service.ISysFileMetadataService;
+import com.mdframe.forge.starter.core.domain.PageQuery;
+import com.mdframe.forge.starter.file.core.FileManager;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+/**
+ * 文件元数据Service实现
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class SysFileMetadataServiceImpl extends ServiceImpl<SysFileMetadataMapper, SysFileMetadata>
+        implements ISysFileMetadataService {
+    
+    private final FileManager fileManager;
+    
+    @Override
+    public Page<SysFileMetadata> page(PageQuery query, SysFileMetadata condition) {
+        LambdaQueryWrapper<SysFileMetadata> wrapper = new LambdaQueryWrapper<>();
+        
+        if (StrUtil.isNotBlank(condition.getOriginalName())) {
+            wrapper.like(SysFileMetadata::getOriginalName, condition.getOriginalName());
+        }
+        
+        if (StrUtil.isNotBlank(condition.getStorageType())) {
+            wrapper.eq(SysFileMetadata::getStorageType, condition.getStorageType());
+        }
+        
+        if (StrUtil.isNotBlank(condition.getBusinessType())) {
+            wrapper.eq(SysFileMetadata::getBusinessType, condition.getBusinessType());
+        }
+        
+        if (StrUtil.isNotBlank(condition.getBusinessId())) {
+            wrapper.eq(SysFileMetadata::getBusinessId, condition.getBusinessId());
+        }
+        
+        if (condition.getUploaderId() != null) {
+            wrapper.eq(SysFileMetadata::getUploaderId, condition.getUploaderId());
+        }
+        
+        if (condition.getGroupId() != null) {
+            wrapper.eq(SysFileMetadata::getGroupId, condition.getGroupId());
+        }
+        
+        if (StrUtil.isNotBlank(condition.getMimeType())) {
+            wrapper.likeRight(SysFileMetadata::getMimeType, condition.getMimeType());
+        }
+
+        if (condition.getIsPrivate() != null) {
+            wrapper.eq(SysFileMetadata::getIsPrivate, condition.getIsPrivate());
+        }
+
+        if (!StpUtil.hasPermission("*:*:*")) {
+            Long currentUserId = StpUtil.getLoginIdAsLong();
+            wrapper.and(w -> w.eq(SysFileMetadata::getIsPrivate, false)
+                             .or()
+                             .eq(SysFileMetadata::getUploaderId, currentUserId));
+        }
+
+        wrapper.eq(SysFileMetadata::getStatus, "1");
+        
+        wrapper.orderByDesc(SysFileMetadata::getUploadTime);
+        
+        Page<SysFileMetadata> page = new Page<>(query.getPageNum(), query.getPageSize());
+        return this.baseMapper.selectPage(page, wrapper);
+    }
+    
+    @Override
+    public List<SysFileMetadata> listByBusiness(String businessType, String businessId) {
+        return this.lambdaQuery()
+                .eq(SysFileMetadata::getBusinessType, businessType)
+                .eq(SysFileMetadata::getBusinessId, businessId)
+                .eq(SysFileMetadata::getStatus, 1)
+                .orderByDesc(SysFileMetadata::getUploadTime)
+                .list();
+    }
+    
+    @Override
+    public SysFileMetadata getByFileId(String fileId) {
+        return this.lambdaQuery()
+                .eq(SysFileMetadata::getFileId, fileId)
+                .eq(SysFileMetadata::getStatus, 1)
+                .one();
+    }
+
+    private void checkOwnership(SysFileMetadata metadata) {
+        if (metadata == null) return;
+        if (StpUtil.hasPermission("*:*:*")) return;
+        Long currentUserId = StpUtil.getLoginIdAsLong();
+        if (metadata.getUploaderId() != null && !currentUserId.equals(metadata.getUploaderId())) {
+            throw new RuntimeException("无权操作他人素材");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void removeByFileId(String fileId) {
+        SysFileMetadata metadata = this.lambdaQuery()
+                .eq(SysFileMetadata::getFileId, fileId)
+                .eq(SysFileMetadata::getStatus, 1)
+                .one();
+        if (metadata == null) {
+            throw new RuntimeException("素材不存在");
+        }
+        checkOwnership(metadata);
+        fileManager.delete(metadata.getFileId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void removeBatch(String[] fileIds) {
+        for (String fileId : fileIds) {
+            try {
+                SysFileMetadata fileMetadata = this.getById(fileId);
+                fileManager.delete(fileMetadata.getFileId());
+            } catch (Exception e) {
+                log.error("删除文件失败: {}", fileId, e);
+            }
+        }
+    }
+
+    @Override
+    public void rename(String fileId, String originalName) {
+        SysFileMetadata existing = this.lambdaQuery()
+                .eq(SysFileMetadata::getFileId, fileId)
+                .eq(SysFileMetadata::getStatus, 1)
+                .one();
+        checkOwnership(existing);
+        this.lambdaUpdate()
+                .eq(SysFileMetadata::getFileId, fileId)
+                .set(SysFileMetadata::getOriginalName, originalName)
+                .update();
+    }
+}

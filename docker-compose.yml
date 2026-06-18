@@ -1,8 +1,57 @@
 services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: eduai
+      MYSQL_USER: eduai
+      MYSQL_PASSWORD: ${DB_PASSWORD:-eduai_dev_password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-eduai_root_dev_password}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./backend/forge-admin-server/sql/初始化脚本.sql:/docker-entrypoint-initdb.d/01-forge.sql:ro
+      - ./backend/eduai-business/src/main/resources/sql/eduai_mvp.sql:/docker-entrypoint-initdb.d/02-eduai.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD:-eduai_root_dev_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-eduai_redis_dev_password}"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-eduai_redis_dev_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   backend:
     build:
       context: ./backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
-      - "8080:8080"
+      - "8580:8580"
     environment:
-      SPRING_PROFILES_ACTIVE: default
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: mysql
+      DB_NAME: eduai
+      DB_USERNAME: eduai
+      DB_PASSWORD: ${DB_PASSWORD:-eduai_dev_password}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-eduai_redis_dev_password}
+      FORGE_CRYPTO_SECRET_KEY: ${FORGE_CRYPTO_SECRET_KEY:-8r0fV9G3kLcNz7p2xQaA1w==}
+
+volumes:
+  mysql-data:
+  redis-data:

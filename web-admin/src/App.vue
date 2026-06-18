@@ -1,136 +1,178 @@
 <template>
-  <main class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <span class="brand-mark">E</span>
-        <div>
-          <strong>EduAI Campus</strong>
-          <small>AI 伴学 MVP</small>
-        </div>
-      </div>
-      <nav>
-        <button class="active">工作台</button>
-        <button>学生画像</button>
-        <button>成绩趋势</button>
-        <button>伴学设置</button>
-        <button>奖励记录</button>
-      </nav>
-    </aside>
+  <n-config-provider
+    class="wh-full"
+    :locale="zhCN"
+    :date-locale="dateZhCN"
+    :theme="appStore.isDark ? darkTheme : undefined"
+    :theme-overrides="appStore.naiveThemeOverrides"
+  >
+    <!-- 当菜单数据未加载完成时显示加载状态 -->
+    <div v-if="showLoading" class="loading-wrapper">
+      <n-spin size="large">
+        <template #description>
+          <div class="loading-text">
+            正在加载...
+          </div>
+        </template>
+      </n-spin>
+    </div>
+    <router-view v-else v-slot="{ Component, route: curRoute }">
+      <component :is="LayoutComponent" :key="curRoute.meta?.layout || appStore.layout">
+        <!--        <transition name="fade-slide" mode="out-in" appear> -->
+        <KeepAlive :include="keepAliveNames">
+          <component :is="Component" v-if="!tabStore.reloading" :key="curRoute.fullPath" />
+        </KeepAlive>
+        <!--        </transition> -->
+      </component>
 
-    <section class="content">
-      <header class="topbar">
-        <div>
-          <h1>学校机构 AI 伴学工作台</h1>
-          <p>2 周 MVP 主线：AI 伴学、成绩趋势、教师点评、家长奖励记录。</p>
-        </div>
-        <a class="template-link" href="/api/scores/import-template">下载成绩导入模板</a>
-      </header>
+      <LayoutSetting v-if="layoutSettingVisible" class="fixed right-12 top-1/2 z-999" />
+    </router-view>
 
-      <section class="summary-grid">
-        <article class="panel highlight">
-          <span>伴学学生</span>
-          <strong>{{ summary?.studentName || '加载中' }}</strong>
-          <p>{{ summary?.weeklySummary }}</p>
-        </article>
-        <article class="panel">
-          <span>推送提醒</span>
-          <strong>{{ summary?.settings.pushEnabled ? '已开启' : '默认关闭' }}</strong>
-          <p>{{ summary?.settings.pushRule }}</p>
-        </article>
-        <article class="panel">
-          <span>长期记忆</span>
-          <strong>{{ summary?.settings.memoryRetentionDays }} 天</strong>
-          <p>默认 14 天，最大 {{ summary?.settings.maxMemoryRetentionDays }} 天。</p>
-        </article>
-        <article class="panel">
-          <span>奖励记录</span>
-          <strong>{{ rewards.length }}</strong>
-          <p>首期只记录物质/精神奖励和兑现状态。</p>
-        </article>
-      </section>
-
-      <section class="workspace">
-        <article class="panel chart-panel">
-          <div class="section-heading">
-            <div>
-              <h2>各科成绩变化趋势</h2>
-              <p>教师可据此点评，家长可查看孩子成长变化。</p>
-            </div>
-            <span class="status">教师录入 + Excel 导入</span>
-          </div>
-          <div class="chart">
-            <div v-for="subject in subjectSeries" :key="subject.name" class="chart-row">
-              <strong>{{ subject.name }}</strong>
-              <div class="bars">
-                <span
-                  v-for="point in subject.points"
-                  :key="point.examName"
-                  :style="{ height: `${Math.max(12, point.score)}%` }"
-                  :title="`${point.examName}: ${point.score}`"
-                />
-              </div>
-              <em>{{ subject.points[subject.points.length - 1]?.score || 0 }} 分</em>
-            </div>
-          </div>
-        </article>
-
-        <article class="panel">
-          <div class="section-heading">
-            <div>
-              <h2>AI 伴学建议</h2>
-              <p>建议必须包含依据、动作和完成标准。</p>
-            </div>
-          </div>
-          <ul class="suggestions">
-            <li v-for="item in summary?.todaySuggestions" :key="item">{{ item }}</li>
-          </ul>
-          <div class="weak-box">
-            <span>薄弱点</span>
-            <strong>{{ summary?.weakSubjects.join('、') }}</strong>
-          </div>
-        </article>
-      </section>
-
-      <section class="workspace lower">
-        <article class="panel">
-          <h2>教师点评</h2>
-          <textarea v-model="teacherComment" placeholder="针对薄弱部分输入指导建议"></textarea>
-          <button class="primary" @click="teacherComment = ''">保存点评</button>
-        </article>
-        <article class="panel">
-          <h2>家长奖励记录</h2>
-          <div class="reward-card">
-            <span>物质奖励</span>
-            <strong>数学达到 100 分，奖励 100 元零花钱</strong>
-            <small>品级：A 级，状态：待兑现</small>
-          </div>
-          <div class="reward-card">
-            <span>精神奖励</span>
-            <strong>周末家庭表扬与自主活动时间</strong>
-            <small>品级：B 级，状态：已记录</small>
-          </div>
-        </article>
-      </section>
-    </section>
-  </main>
+    <!-- 全局水印 -->
+    <div v-if="watermarkConfig.enable" class="watermark-layer" :style="watermarkStyle" />
+  </n-config-provider>
 </template>
 
-<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { getCompanionSummary, getRewards, getScoreTrends, type CompanionSummary, type RewardRule, type ScoreRecord } from './api'
+<script setup>
+import { darkTheme, dateZhCN, zhCN } from 'naive-ui'
+import { computed, defineAsyncComponent, markRaw, shallowRef, watch } from 'vue'
+// 初始化响应式字体功能
+import { onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { LayoutSetting } from '@/components'
+import { useWatermark } from '@/composables/useWatermark'
+import { useAppStore, usePermissionStore, useTabStore, useUserStore } from '@/store'
+import { initResponsiveFont } from '@/utils/responsive-font'
 
-const summary = ref<CompanionSummary>()
-const scoreTrends = ref<Record<string, ScoreRecord[]>>({})
-const rewards = ref<RewardRule[]>([])
-const teacherComment = ref('数学提升明显，建议保持基础题满分率；英语阅读需要每天 20 分钟精读。')
+import { layoutSettingVisible } from './settings'
 
-const subjectSeries = computed(() =>
-  Object.entries(scoreTrends.value).map(([name, points]) => ({ name, points }))
-)
+// 使用 shallowRef 确保 Layout 引用稳定
+const LayoutComponent = shallowRef(null)
 
-onMounted(async () => {
-  summary.value = await getCompanionSummary()
-  scoreTrends.value = await getScoreTrends()
-  rewards.value = await getRewards()
+const layouts = new Map()
+const layoutModules = import.meta.glob('./layouts/*/index.vue')
+function getLayout(name) {
+  // 利用map将加载过的layout缓存起来，防止重新加载layout导致页面闪烁
+  if (layouts.has(name)) {
+    return layouts.get(name)
+  }
+  const loader = layoutModules[`./layouts/${name}/index.vue`]
+  if (!loader) {
+    throw new Error(`Unknown layout: ${name}`)
+  }
+  const layout = markRaw(defineAsyncComponent(loader))
+  layouts.set(name, layout)
+  return layout
+}
+
+const route = useRoute()
+const appStore = useAppStore()
+const permissionStore = usePermissionStore()
+const userStore = useUserStore()
+
+// 监听布局变化，及时更新布局组件
+watch(() => route.meta?.layout || appStore.layout, (layoutName) => {
+  if (layoutName) {
+    const layoutComponent = getLayout(layoutName)
+    LayoutComponent.value = layoutComponent
+  }
+  else {
+    LayoutComponent.value = null
+  }
+}, { immediate: true })
+
+// 显示加载状态的条件：
+// 1. 用户已登录但路由守卫未完成
+// 2. 菜单数据未加载完成
+const showLoading = computed(() => {
+  // 如果路由守卫已完成且菜单数据已加载，则不显示加载状态
+  if (appStore.routeGuardCompleted && permissionStore.menuDataLoaded) {
+    return false
+  }
+
+  // 如果用户已登录但菜单数据未加载完成，则显示加载状态
+  if (userStore.userInfo && !permissionStore.menuDataLoaded) {
+    return true
+  }
+
+  // 在路由守卫完成之前，如果用户已登录，显示加载状态
+  if (userStore.userInfo && appStore.routeGuardCompleted === false) {
+    return true
+  }
+
+  // 其他情况根据路由守卫状态决定
+  return !appStore.routeGuardCompleted
+})
+
+if (appStore.layout === 'default')
+  appStore.setLayout('')
+
+const tabStore = useTabStore()
+// 修改缓存逻辑，根据tabStore中的cacheViews来决定是否缓存
+const keepAliveNames = computed(() => {
+  return tabStore.cacheViews
+})
+
+// 使用水印功能
+const { watermarkConfig, getWatermarkStyle } = useWatermark()
+
+// 水印样式
+const watermarkStyle = computed(() => getWatermarkStyle())
+onMounted(() => {
+  initResponsiveFont((scale) => {
+    // 更新Naive UI主题配置，使组件库字体也响应式变化
+    appStore.updateNaiveThemeOverrides({
+      fontSize: `calc(14px * var(--font-scale, 1))`,
+    })
+  })
+})
+
+// 监听主题变化
+watchEffect(() => {
+  appStore.setThemeColor(appStore.primaryColor, appStore.isDark)
+  // 应用主题配置（响应暗色模式变化）
+  appStore.applyCurrentTheme()
 })
 </script>
+
+<style scoped>
+.loading-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.4);
+  z-index: 99;
+}
+
+.loading-text {
+  margin-top: 12px;
+  font-size: 16px;
+  color: #333;
+}
+
+:deep(.n-spin-content) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+:deep(.n-spin-description) {
+  margin-top: 12px;
+}
+
+/* 水印层样式 */
+.watermark-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+}
+</style>
