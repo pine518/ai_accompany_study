@@ -50,7 +50,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
                     // 排除Swagger文档
                     .notMatch("/doc.html", "/webjars/**")
                     // 排除健康检查
-                    .notMatch("/actuator/**", "/health")
+                    .notMatch("/actuator/**", "/health", "/api/health")
                     .notMatch("/ws/**")
                     .notMatch(authProperties.getApiPermissionExcludePaths())
                     // 执行登录校验
@@ -68,7 +68,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 // 排除Swagger文档
                 .excludePathPatterns("/swagger-ui/**", "/v3/api-docs/**", "/doc.html", "/webjars/**")
                 // 排除健康检查
-                .excludePathPatterns("/actuator/**", "/health")
+                .excludePathPatterns("/actuator/**", "/health", "/api/health")
                 .excludePathPatterns(authProperties.getApiPermissionExcludePaths())
                 .order(2);  // 优先级2，在登录校验之后执行
     }

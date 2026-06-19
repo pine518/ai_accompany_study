@@ -8,15 +8,15 @@ spring:
         master:
           type: ${spring.datasource.type}
           driverClassName: com.mysql.cj.jdbc.Driver
-          url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:eduai}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
-          username: ${DB_USERNAME:eduai}
-          password: ${DB_PASSWORD:eduai_dev_password}
+          url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:ai_study}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+          username: ${DB_USERNAME:root}
+          password: ${DB_PASSWORD:iMadder.520}
   data:
     redis:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
       database: 0
-      password: ${REDIS_PASSWORD:eduai_redis_dev_password}
+      password: ${REDIS_PASSWORD:"autumn073"}
       timeout: 10s
       ssl.enabled: false
       redisson:
@@ -24,7 +24,7 @@ spring:
           singleServerConfig:
             address: "redis://${REDIS_HOST:redis}:${REDIS_PORT:6379}"
             database: 0
-            password: ${REDIS_PASSWORD:eduai_redis_dev_password}
+            password: ${REDIS_PASSWORD:"autumn073"}
             connectTimeout: 10000
             timeout: 3000
             retryAttempts: 3
